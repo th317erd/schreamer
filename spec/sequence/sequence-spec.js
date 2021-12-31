@@ -1,3 +1,6 @@
+const Path  = require('path');
+const OS    = require('os');
+
 const { SNAPSHOT_PATH, compareToSnapshot }  = require('../support/utils');
 const { Definers, createWriter }            = require('../../src');
 
@@ -34,23 +37,22 @@ describe("Test01", function() {
     }
   }
 
-  const PROCESSOR = {
-    'test01.bin': {
-      fibonacci: function*() {
-        // Size of sequence
-        yield 18;
+  const PROVIDER = {
+    fibonacci: function*() {
+      // Size of sequence
+      yield 18;
 
-        // Sequence
-        yield *fibonacci();
-      }
+      // Sequence
+      yield *fibonacci();
     }
   };
 
   it("should write successfully (BE)", function(done) {
-    const writer = createWriter(BE_FORMAT, PROCESSOR);
+    const writer = createWriter(BE_FORMAT, PROVIDER);
 
-    writer('/tmp/schreamer/test01.bin').then(() => {
-      var result = compareToSnapshot('sequence01-be.snap', '/tmp/schreamer/test01.bin');
+    var filePath = Path.join(OS.tmpdir(), 'schreamer', 'sequence01-be.bin');
+    writer('/tmp/schreamer/sequence01-be.bin').then(() => {
+      var result = compareToSnapshot('sequence01-be.snap', filePath);
       expect(result).toBe(true);
 
       done();
@@ -58,10 +60,11 @@ describe("Test01", function() {
   });
 
   it("should write successfully (LE)", function(done) {
-    const writer = createWriter(LE_FORMAT, PROCESSOR);
+    const writer = createWriter(LE_FORMAT, PROVIDER);
 
-    writer('/tmp/schreamer/test01.bin').then(() => {
-      var result = compareToSnapshot('sequence01-le.snap', '/tmp/schreamer/test01.bin');
+    var filePath = Path.join(OS.tmpdir(), 'schreamer', 'sequence01-le.bin');
+    writer('/tmp/schreamer/sequence01-le.bin').then(() => {
+      var result = compareToSnapshot('sequence01-le.snap', filePath);
       expect(result).toBe(true);
 
       done();

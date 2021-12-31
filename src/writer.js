@@ -55,91 +55,181 @@ async function writeToStream() {
   if (!writeBufferOffset)
     return;
 
-  var chunk = writeBuffer.slice(0, writeBufferOffset);
+  var chunk = Buffer.from(writeBuffer.slice(0, writeBufferOffset));
   await doWrite(chunk);
 
   this.updateWriteBufferOffset(0);
 }
 
-async function writeToBuffer(node, value) {
+async function writeToBuffer(node, value, userContext) {
+  const doWriteBuffer = async (sourceBuffer) => {
+    var sourceBufferOffset = 0;
+
+    while(true) {
+      var sizeToCopy = writeBuffer.length - writeBufferOffset;
+      if ((sourceBufferOffset + sizeToCopy) > sourceBuffer.length)
+        sizeToCopy = sourceBuffer.length - sourceBufferOffset;
+
+      sourceBuffer.copy(writeBuffer, writeBufferOffset, sourceBufferOffset, sourceBufferOffset + sizeToCopy);
+
+      writeBufferOffset += sizeToCopy;
+      this.updateWriteBufferOffset(writeBufferOffset);
+
+      if (writeBufferOffset >= writeBuffer.length) {
+        await writeToStream.call(this);
+        writeBufferOffset = 0;
+      }
+
+      sourceBufferOffset += sizeToCopy;
+      if (sourceBufferOffset >= sourceBuffer.length)
+        break;
+    }
+  };
+
   var {
     writeBuffer,
     writeBufferOffset,
   } = this;
 
-  var byteSize = (typeof node.byteSize === 'function') ? node.byteSize(node, value, this) : node.byteSize;
-  if ((writeBufferOffset + byteSize) > writeBuffer.length) {
-    await writeToStream.call(this);
-    writeBufferOffset = 0;
+  if (node.kind !== 'string' && node.type !== 'custom') {
+    var byteSize = (typeof node.byteSize === 'function') ? node.byteSize(node, value, this) : node.byteSize;
+    if ((writeBufferOffset + byteSize) > writeBuffer.length) {
+      await writeToStream.call(this);
+      writeBufferOffset = 0;
+    }
+
+    node.writer.call(this, value, writeBuffer, writeBufferOffset, userContext);
+
+    this.updateWriteBufferOffset(writeBufferOffset + byteSize);
+
+    return byteSize;
+  } else {
+    var result = await node.writer.call(this, value, writeBuffer, writeBufferOffset, userContext);
+    if (result && Buffer.isBuffer(result))
+      await doWriteBuffer(result);
+
+    return result.length;
   }
-
-  node.writer.call(this, writeBuffer, value, writeBufferOffset);
-
-  this.updateWriteBufferOffset(writeBufferOffset + byteSize);
-
-  return byteSize;
 }
 
-async function typeHandler(node, processor, options, userContext) {
+async function typeHandler(node, provider, options, userContext) {
   if (!this['endian'])
     throw new Error('Panic: Endianness not specified. Endianness can not be implicit, and must be defined.');
 
   var path = Path.join(this.path, (node.name) ? node.name : node.type);
   var value;
 
-  if (isValid(processor))
-    value = (node.name) ? processor[node.name] : processor;
+  if (isValid(provider))
+    value = (node.name) ? provider[node.name] : provider;
 
   if (value === undefined)
     value = node.value;
 
+  if (node.type === 'custom') {
+    if (value === provider)
+      value = undefined;
+
+    if (typeof value === 'function')
+      value = value.call(this, userContext);
+
+    return await writeToBuffer.call(this, node, value, userContext);
+  }
+
   if (!isValid(value))
     throw new Error(`${path}: Invalid value provided`);
 
+  const writeArrayItems = async (items) => {
+    var sequenceSize = items.length;
+    await writeToBuffer.call(this, node, sequenceSize, userContext);
+
+    for (var i = 0, il = items.length; i < il; i++) {
+      var itemValue = items[i];
+      var itemPath  = Path.join(path, `[${i}]`);
+
+      if (!isValid(itemValue))
+        throw new Error(`${itemPath}: Invalid value provided`);
+
+      await process.call(this.newContext(this, { path: itemPath }), node.value, itemValue, options, userContext);
+    }
+  };
+
   if (typeof value === 'function') {
+    value = value.call(this, userContext);
+    if (!isValid(value))
+      throw new Error(`${path}: Invalid value provided`);
+
     // Handle a sequence
     if (node.value instanceof Array) {
-      var iter          = value.call(this, userContext);
-      var sequenceSize  = iter.next();
+      var items = value;
 
-      if (sequenceSize.done)
-        return;
+      // Raw array?
+      if (items instanceof Array)
+        return await writeArrayItems(items);
 
-      sequenceSize = sequenceSize.value;
+      // Or generator?
+      var index = 0;
+      for (var item of items) {
+        // First is the length of items to follow
+        if (index === 0) {
+          var sequenceSize = item;
+          await writeToBuffer.call(this, node, sequenceSize, userContext);
+        } else {
+          var itemPath = Path.join(path, `[${index - 1}]`);
+          if (!isValid(item))
+            throw new Error(`${itemPath}: Invalid value provided`);
 
-      await writeToBuffer.call(this, node, sequenceSize);
+          await process.call(this.newContext(this, { path: itemPath }), node.value, item, options, userContext);
+        }
 
-      for (var item = iter.next(), index = 0; !item.done; item = iter.next(), index++) {
-        var itemValue = item.value;
-        var itemPath  = Path.join(path, `[${index}]`);
-
-        if (!isValid(itemValue))
-          throw new Error(`${itemPath}: Invalid value provided`);
-
-        await process.call(this.newContext(this, { path: itemPath }), node.value, itemValue, options, userContext);
+        index++;
       }
 
       return;
-    } else {
-      value = value.call(this, userContext);
     }
+  } else if (value instanceof Array) {
+    // Handle array of items
+    return await writeArrayItems(value);
+  } else if (node.value && node.value.kind === 'string') {
+    // Handle writing a string
+    var stringNode = node.value;
+
+    // If value wasn't provided, then extract the actual value from the string node
+    if (value === stringNode) {
+      value = value.value;
+      path  = Path.join(path, (stringNode.name) ? stringNode.name : stringNode.type);
+
+      if (!isValid(value))
+        throw new Error(`${path}: Invalid value provided`);
+    }
+
+    // Write length of string in bytes
+    var byteSize = stringNode.byteSize(stringNode, value, this);
+    await writeToBuffer.call(this, node, byteSize, userContext);
+
+    // Write string
+    await writeToBuffer.call(this, stringNode, value, userContext);
+
+    return;
   }
 
-  await writeToBuffer.call(this, node, value);
+  await writeToBuffer.call(this, node, value, userContext);
 }
 
 const methods = {
-  big_endian: async function(node, processor, options, userContext) {
-    return await process.call(this.newContext(this, { endian: 'be' }), node.children, processor, options, userContext);
+  big_endian: async function(node, provider, options, userContext) {
+    return await process.call(this.newContext(this, { endian: 'be' }), node.children, provider, options, userContext);
   },
-  little_endian: async function(node, processor, options, userContext) {
-    return await process.call(this.newContext(this, { endian: 'le' }), node.children, processor, options, userContext);
+  little_endian: async function(node, provider, options, userContext) {
+    return await process.call(this.newContext(this, { endian: 'le' }), node.children, provider, options, userContext);
   },
-  dir: async function(node, processor, options, userContext) {
+  dir: async function(node, provider, options, userContext) {
     var path = Path.resolve(this.path, node.path);
-    return await process.call(this.newContext(this, { path }), node.children, processor[node.path], options, userContext);
+    return await process.call(this.newContext(this, { path }), node.children, provider[node.path], options, userContext);
   },
-  file: async function(node, processor, options, userContext) {
+  file: async function(node, provider, options, userContext) {
+    if (this['writeStream'])
+      throw new Error('Panic: Attempting to open a file within a file');
+
     return new Promise((resolve, reject) => {
       FileSystem.mkdirSync(this.path, { recursive: true });
 
@@ -161,10 +251,12 @@ const methods = {
           newContext.writeBufferOffset = writeBufferOffset;
         };
 
+        newContext.writeToStream = writeToStream.bind(newContext);
+
         process.call(
           newContext,
           node.children,
-          processor[node.path],
+          provider[node.path],
           options,
           userContext,
         ).then(async () => {
@@ -184,11 +276,13 @@ const methods = {
   u64: typeHandler,
   f32: typeHandler,
   f64: typeHandler,
-
-  // TODO: String types
+  custom: typeHandler,
+  // String handlers aren't here deliberately.
+  // They are handled by their "length" specifier,
+  // which could be a U8, U16, U32, or U64 node.
 };
 
-async function process(_nodes, processor, options, userContext) {
+async function process(_nodes, provider, options, userContext) {
   var nodes = _nodes;
   if (!(nodes instanceof Array))
     nodes = [ nodes ];
@@ -196,21 +290,25 @@ async function process(_nodes, processor, options, userContext) {
   var results = [];
 
   for (var i = 0, il = nodes.length; i < il; i++) {
-    var node    = nodes[i];
+    var node = nodes[i];
+    if (!node)
+      throw new Error(`Panic: Invalid type '${this['path']}/${node}'`);
+
     var type    = node.type;
     var method  = methods[type];
 
     if (!method)
-      throw new Error(`Unknown type '${type.toUpperCase()}'... aborting`);
+      throw new Error(`Panic: Unknown type '${this['path']}/${type.toUpperCase()}'`);
 
-    results.push(await method.call(this, node, processor, options, userContext));
+    results.push(await method.call(this, node, provider, options, userContext));
   }
 
   return results;
 }
 
-function createWriter(_format, processor) {
-  var format = _format;
+function createWriter(_format, _provider) {
+  var format    = _format;
+  var provider = _provider;
 
   return async function(_options, _userContext) {
     var options = {
@@ -228,9 +326,14 @@ function createWriter(_format, processor) {
     // if one isn't found, then add one
     if (!hasFileNode(format)) {
       var path = options.path;
-
       options.path = Path.dirname(path);
-      format = Definers.FILE(Path.basename(path), format);
+
+      var fileName = Path.basename(path);
+      format = Definers.FILE(fileName, format);
+
+      provider = {
+        [fileName]: provider,
+      };
     }
 
     var userContext = _userContext || {};
@@ -246,7 +349,7 @@ function createWriter(_format, processor) {
       }
     };
 
-    return await process.call(context, format, processor, options, userContext);
+    return await process.call(context, format, provider, options, userContext);
   };
 }
 

@@ -12,7 +12,7 @@ function makeWriter(type, converter) {
     bufferMethodNames['le'] = `write${type}LE`;
   }
 
-  return function(buffer, _value, offset) {
+  return function(_value, buffer, offset) {
     var value       = _value;
     var endian      = this['endian'];
     var methodName  = bufferMethodNames[endian];
@@ -42,7 +42,17 @@ function makeReader(type) {
     var endian      = this['endian'];
     var methodName  = bufferMethodNames[endian];
 
-    buffer[methodName](offset);
+    return buffer[methodName](offset);
+  };
+}
+
+function makeStringWriter(type) {
+  return function(_value) {
+    var value = _value;
+    if (typeof value !== 'string')
+      value = ('' + value);
+
+    return Buffer.from(value, type);
   };
 }
 
@@ -53,8 +63,16 @@ function makeNode(defintion, _childrenKey) {
   if (!children && !_childrenKey)
     children = defintion['value'];
 
-  if (!children || !(children instanceof Array))
+  if (!children || !(children instanceof Array)) {
+    if (children && children.type) {
+      children.parent = defintion;
+
+      if (typeof children.validate === 'function')
+        children.validate(children);
+    }
+
     return defintion;
+  }
 
   for (var i = 0, il = children.length; i < il; i++) {
     var child = children[i];
@@ -62,9 +80,22 @@ function makeNode(defintion, _childrenKey) {
       continue;
 
     child.parent = defintion;
+
+    if (typeof child.validate === 'function')
+      child.validate(child);
   }
 
   return defintion;
+}
+
+function getStringByteSize(type) {
+  return function (node, _value) {
+    var value = _value;
+    if (typeof value !== 'string')
+      value = ('' + value);
+
+    return Buffer.byteLength(value, type);
+  };
 }
 
 function BIG_ENDIAN(...children) {
@@ -207,30 +238,54 @@ function F64(name, value) {
   });
 }
 
-function LATIN1(name, value) {
+function LATIN1(value) {
   return makeNode({
     type: 'latin1',
-    name,
+    kind: 'string',
     value,
-    byteSize: (node, value) => {},
+    byteSize: getStringByteSize('latin1'),
+    writer:   makeStringWriter('latin1'),
+    validate: (node) => {
+      if (!node.parent || [ 'u8', 'u16', 'u32', 'u64' ].indexOf(node.parent.type) < 0)
+        throw new Error('LATIN1 string type must be wrapped in a U8, U16, U32, or U64 to specify the length of the string');
+    },
   });
 }
 
-function UTF16(name, value) {
+function UTF16(value) {
   return makeNode({
     type: 'utf16',
-    name,
+    kind: 'string',
     value,
-    byteSize: (node, value) => {},
+    byteSize: getStringByteSize('utf16le'),
+    writer:   makeStringWriter('utf16le'),
+    validate: (node) => {
+      if (!node.parent || [ 'u8', 'u16', 'u32', 'u64' ].indexOf(node.parent.type) < 0)
+        throw new Error('UTF16 string type must be wrapped in a U8, U16, U32, or U64 to specify the length of the string');
+    },
   });
 }
 
-function UTF8(name, value) {
+function UTF8(value) {
   return makeNode({
     type: 'utf8',
-    name,
+    kind: 'string',
     value,
-    byteSize: (node, value) => {},
+    byteSize: getStringByteSize('utf8'),
+    writer:   makeStringWriter('utf8'),
+    validate: (node) => {
+      if (!node.parent || [ 'u8', 'u16', 'u32', 'u64' ].indexOf(node.parent.type) < 0)
+        throw new Error('UTF8 string type must be wrapped in a U8, U16, U32, or U64 to specify the length of the string');
+    },
+  });
+}
+
+function CUSTOM(writer, reader, name) {
+  return makeNode({
+    type: 'custom',
+    name,
+    writer,
+    reader,
   });
 }
 
@@ -252,4 +307,5 @@ module.exports = {
   LATIN1,
   UTF16,
   UTF8,
+  CUSTOM,
 };
