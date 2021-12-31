@@ -14,13 +14,7 @@ function compareToSnapshot(name, _result) {
   return (buffer.compare(result) === 0);
 }
 
-function saveToSnapshot(name, result) {
-  var snapshotPath = Path.join(SNAPSHOT_PATH, `${name}.snap`);
-  FileSystem.writeFileSync(snapshotPath, result);
-}
-
 module.exports = {
   SNAPSHOT_PATH,
   compareToSnapshot,
-  saveToSnapshot,
 };

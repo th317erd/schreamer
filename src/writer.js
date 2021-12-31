@@ -1,31 +1,12 @@
-const Path          = require('path');
-const FileSystem    = require('fs');
-const { isValid }   = require('./utils');
-const Definers      = require('./definers');
+const Path        = require('path');
+const FileSystem  = require('fs');
+const {
+  isValid,
+  hasFileNode,
+}                 = require('./utils');
+const Definers    = require('./definers');
 
 const DEFAULT_WRITE_BUFFER_SIZE = 1024 * 2;
-
-function hasFileNode(format) {
-  if (format instanceof Array) {
-    for (var i = 0, il = format.length; i < il; i++) {
-      var node = format[i];
-      if (hasFileNode(node))
-        return true;
-    }
-  }
-
-  if (format.type === 'dir')
-    return true;
-
-  if (format.type === 'file')
-    return true;
-
-  var children = format.children || format.value;
-  if (children instanceof Array)
-    return hasFileNode(children);
-
-  return false;
-}
 
 async function writeToStream() {
   const doWrite = (chunk) => {
@@ -249,6 +230,7 @@ const methods = {
 
         newContext.updateWriteBufferOffset = (writeBufferOffset) => {
           newContext.writeBufferOffset = writeBufferOffset;
+          return writeBufferOffset;
         };
 
         newContext.writeToStream = writeToStream.bind(newContext);

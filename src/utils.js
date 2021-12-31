@@ -8,41 +8,50 @@ function isValid(value) {
   return true;
 }
 
-function isNOE(...args) {
-  const empty = (value) => {
-    if (value == null)
-      return true;
+function fileNodeCount(format, _count) {
+  var count = _count || 0;
 
-    if (typeof value === 'number' && !isFinite(value))
-      return true;
+  if (format instanceof Array) {
+    for (var i = 0, il = format.length; i < il; i++) {
+      var node = format[i];
+      count += fileNodeCount(node);
+    }
 
-    if (typeof value === 'string' && value.trim() === '')
-      return true;
-
-    if (value instanceof Array && value.length === 0)
-      return true;
-
-    if (value && value.constructor === Object.prototype.constructor && Object.keys(value).length === 0)
-      return true;
-
-    return false;
-  };
-
-  for (var i = 0, il = args.length; i < il; i++) {
-    var arg = args[i];
-    if (empty(arg))
-      return true;
+    return count;
   }
 
-  return false;
+  if (format.type === 'file')
+    count += 1;
+
+  var children = format.children || format.value;
+  if (children instanceof Array)
+    count += fileNodeCount(children);
+
+  return count;
 }
 
-function isNotNOE() {
-  return !isNOE.apply(this, arguments);
+function hasFileNode(format) {
+  return (fileNodeCount(format) > 0)
+}
+
+function createResolvable() {
+  var resolve;
+  var reject;
+
+  var promise = new Promise((_resolve, _reject) => {
+    resolve = _resolve;
+    reject = _reject;
+  });
+
+  promise.resolve = resolve;
+  promise.reject = reject;
+
+  return promise;
 }
 
 module.exports = {
   isValid,
-  isNOE,
-  isNotNOE,
+  fileNodeCount,
+  hasFileNode,
+  createResolvable,
 };
