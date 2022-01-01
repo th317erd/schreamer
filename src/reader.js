@@ -134,12 +134,6 @@ const methods = {
 
           newContext.updateReadBuffer(newBuffer);
           newContext.updateReadBufferOffset(0);
-
-          if (newBuffer.length >= options.readBufferSize) {
-            var promise = newContext.dataAvailable;
-            newContext.dataAvailable = createResolvable();
-            promise.resolve();
-          }
         });
 
         readStream.on('end', () => {

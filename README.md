@@ -152,6 +152,50 @@ When a provider provides data to the underlying system it can do so either in ra
 
 For sequences, these provider callbacks can be generator functions. If they are, then the generator function is expected to `yield` the length of the sequence first, before yielding the remaining items of the sequence. Generator methods are used to provide an efficient means of managing data (instead of copying potentially large data into new formats needed for writing).
 
+## Methods
+
+> **createWriter(*template, dataProvider*)**
+>
+> Create a writer using the specified template and data provider.
+>
+> `template`: The top-most node of a template created by definers.
+>
+> `dataProvider`: An object, keyed by node name, that provides data to the writer.
+>
+> **Return value**: A writer method, which when called, will return a promise and write the data specified by the `template` and `dataProvider`.
+
+<br>
+
+> **writer(*path|options*)**
+>
+> Writer returned from `createWriter`. Call this method to actually write data to the underlying file-system.
+>
+> `path|options`: This can be a string, in which case it specifies a path. This can be a path to a folder if your template contains multiple files, or it can be the full path to a file otherwise. If an object is provided, then you can specify the options `writeBufferSize` (integer), `path` (string), and `createWritableStream` (function).
+>
+> **Return value**: A `Promise` that will resolve successfully on success, or be rejected with an error on failure.
+
+<br>
+
+> **createReader(*template*)**
+>
+> Create a writer using the specified template and data provider.
+>
+> `template`: The top-most node of a template created by definers.
+>
+> **Return value**: A reader method, which when called, will return a promise and read the data specified by the `template`. The success result of the returned promise will be an object containing the read data, keyed by node name.
+
+<br>
+
+> **reader(*path|options*)**
+>
+> Reader returned from `createReader`. Call this method to actually read data from the underlying file-system.
+>
+> `path|options`: This can be a string, in which case it specifies a path. This can be a path to a folder if your template contains multiple files, or it can be the full path to a file otherwise. If an object is provided, then you can specify the options `readBufferSize` (integer), `path` (string), and `createReadableStream` (function).
+>
+> *Note: `readBufferSize` is currently a hint. Buffer sizes may end up larger than this value*.
+>
+> **Return value**: A `Promise` that will resolve successfully with the data read on success, or be rejected with an error on failure.
+
 ## Definers
 
 > **BIG_ENDIAN(*...children*)**
