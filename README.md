@@ -128,18 +128,18 @@ reader('/tmp/schreamer/path/to/write/to').then((data) => {
 
 ## Terminology
 
-1. Format = The binary file format, specified by Definers. At the top-most level this is just another Node.
+1. Format/Template = The binary file format, specified by Definers. At the top-most level this is just another Node.
 2. Provider = A simple object of key/value pairs used to provide data to a writer.
 3. Definer = A simple method that returns a Node to define how to read or write data.
 4. Node = A simple object that defines the structure of the data to be read or written.
 
 ## How schreamer works
 
-Schreamer works by composing "Definers" into a format. Definers are simply methods that return object "nodes". These nodes specify
+Schreamer works by composing "Definers" into a template. Definers are simply methods that return object "nodes". These nodes specify
 the type of data to be read or written.
 
 The underlying system manages opening files for you, filling or
-writing buffers from/to the file-system, and walking the format
+writing buffers from/to the file-system, and walking the template
 of "nodes" to know how to read or write data.
 
 Readers and writers are created by calling `createReader` or `createWriter` respectively. These two methods accept two parameters, a `format`, and a `provider`.
@@ -166,11 +166,13 @@ For sequences, these provider callbacks can be generator functions. If they are,
 
 <br>
 
-> **writer(*path|options*)**
+> **writer(*path|options, [ userContext ]*)**
 >
 > Writer returned from `createWriter`. Call this method to actually write data to the underlying file-system.
 >
 > `path|options`: This can be a string, in which case it specifies a path. This can be a path to a folder if your template contains multiple files, or it can be the full path to a file otherwise. If an object is provided, then you can specify the options `writeBufferSize` (integer), `path` (string), and `createWritableStream` (function).
+>
+> `userContext`: Provided by user, and can be any type of data. This is passed to callbacks, and so can be used inside of providers. This might be, for example, a class instance that you want to pull data from.
 >
 > **Return value**: A `Promise` that will resolve successfully on success, or be rejected with an error on failure.
 
@@ -186,13 +188,15 @@ For sequences, these provider callbacks can be generator functions. If they are,
 
 <br>
 
-> **reader(*path|options*)**
+> **reader(*path|options, [ userContext ]*)**
 >
 > Reader returned from `createReader`. Call this method to actually read data from the underlying file-system.
 >
 > `path|options`: This can be a string, in which case it specifies a path. This can be a path to a folder if your template contains multiple files, or it can be the full path to a file otherwise. If an object is provided, then you can specify the options `readBufferSize` (integer), `path` (string), and `createReadableStream` (function).
 >
 > *Note: `readBufferSize` is currently a hint. Buffer sizes may end up larger than this value*.
+>
+> `userContext`: Provided by user, and can be any type of data. This is passed to callbacks, and so can be used inside of providers. This might be, for example, a class instance that you want to write data to.
 >
 > **Return value**: A `Promise` that will resolve successfully with the data read on success, or be rejected with an error on failure.
 
