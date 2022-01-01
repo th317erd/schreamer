@@ -9,9 +9,9 @@ const {
 } = require('../../src');
 
 describe("Strings Test 01", function() {
-  const { U32, U16, BIG_ENDIAN, LITTLE_ENDIAN, LATIN1, UTF16, UTF8 } = Definers;
+  const { U32, U16, BIG_ENDIAN, LITTLE_ENDIAN, LATIN1, UTF16, UTF8, GROUP } = Definers;
 
-  const FORMAT = [
+  const FORMAT = GROUP(
     // Header
     U32('magic',    0x4C4F434F),
     U16('version',  1),
@@ -19,7 +19,7 @@ describe("Strings Test 01", function() {
     U16('string_utf16', UTF16()),
     U16('string_utf8', UTF8()),
     U16('string_utf8_defualt', UTF8('Test String 123')),
-  ];
+  );
 
   const BE_FORMAT = BIG_ENDIAN(FORMAT);
   const LE_FORMAT = LITTLE_ENDIAN(FORMAT);

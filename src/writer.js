@@ -140,7 +140,7 @@ async function typeHandler(node, provider, options, userContext) {
       throw new Error(`${path}: Invalid value provided`);
 
     // Handle a sequence
-    if (node.value instanceof Array) {
+    if (node.value instanceof Array || (node.value && node.value.type === 'group')) {
       var items = value;
 
       // Raw array?
@@ -215,11 +215,18 @@ const methods = {
       FileSystem.mkdirSync(this.path, { recursive: true });
 
       var path              = Path.resolve(this.path, node.path);
-      var writeStream       = FileSystem.createWriteStream(path);
+      var writeStream       = (typeof options.createWritableStream === 'function')
+                                ? options.createWritableStream.call(this, { node, provider, options, path }, userContext)
+                                : FileSystem.createWriteStream(path);
       var writeBuffer       = Buffer.alloc(options.writeBufferSize);
       var writeBufferOffset = 0;
+      var throwError        = (error) => {
+        this.error = error;
+        reject(error);
+      };
 
-      writeStream.on('error', reject);
+      writeStream.on('error', throwError);
+
       writeStream.on('open', () => {
         var newContext = this.newContext(this, {
           path,
@@ -243,10 +250,22 @@ const methods = {
           userContext,
         ).then(async () => {
           await writeToStream.call(newContext);
+
+          writeStream.end();
+
           resolve();
-        }, reject);
+        }, throwError);
       });
     });
+  },
+  group: async function(node, provider, options, userContext) {
+    return await process.call(this, node.children, provider, options, userContext);
+  },
+  select: async function(node, provider, options, userContext) {
+    var format = node.callback.call(this, { node, provider, options }, userContext);
+    format.parent = node.parent;
+
+    return await process.call(this, format, provider, options, userContext);
   },
   i8: typeHandler,
   u8: typeHandler,
@@ -265,6 +284,9 @@ const methods = {
 };
 
 async function process(_nodes, provider, options, userContext) {
+  if (this.error)
+    throw new Error(this.error);
+
   var nodes = _nodes;
   if (!(nodes instanceof Array))
     nodes = [ nodes ];

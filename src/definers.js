@@ -169,6 +169,20 @@ function FILE(path, ...children) {
   });
 }
 
+function GROUP(...children) {
+  return makeNode({
+    type: 'group',
+    children: (children.length === 1 && children[0] instanceof Array) ? children[0] : children,
+  });
+}
+
+function SELECT(callback) {
+  return makeNode({
+    type: 'select',
+    callback,
+  });
+}
+
 function I8(name, value) {
   return makeNode({
     type: 'i8',
@@ -354,6 +368,8 @@ module.exports = {
   LITTLE_ENDIAN,
   DIR,
   FILE,
+  GROUP,
+  SELECT,
   I8,
   U8,
   I16,

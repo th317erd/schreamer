@@ -78,13 +78,20 @@ const methods = {
 
     return new Promise((resolve, reject) => {
       var path              = Path.resolve(this.path, node.path);
-      var readStream        = FileSystem.createReadStream(path);
+      var readStream        = (typeof options.createWritableStream === 'function')
+                                ? options.createReadableStream.call(this, { node, provider, options, path, dataContext }, userContext)
+                                : FileSystem.createReadStream(path);
       var readBuffer        = Buffer.alloc(0);
       var readBufferOffset  = 0;
       var dataAvailable     = createResolvable();
       var complete          = false;
+      var throwError        = (error) => {
+        this.error = error;
+        reject(error);
+      };
 
-      readStream.on('error', reject);
+      readStream.on('error', throwError);
+
       readStream.on('open', () => {
         var newContext = this.newContext(this, {
           path,
@@ -111,6 +118,9 @@ const methods = {
 
             if (newContext.complete)
               throw new Error('Panic: Stream closed but data was still expected');
+
+            if (newContext.error)
+              throw new Error(newContext.error);
 
             return await newContext.dataAvailable;
           }
@@ -151,10 +161,21 @@ const methods = {
           dataContext,
           userContext,
         ).then(async () => {
+          readStream.destroy();
+
           resolve();
-        }, reject);
+        }, throwError);
       });
     });
+  },
+  group: async function(node, provider, options, userContext) {
+    return await process.call(this, node.children, provider, options, userContext);
+  },
+  select: async function(node, provider, options, userContext) {
+    var format = node.callback.call(this, { node, provider, options }, userContext);
+    format.parent = node.parent;
+
+    return await process.call(this, format, provider, options, userContext);
   },
   i8: typeHandler,
   u8: typeHandler,
@@ -173,6 +194,9 @@ const methods = {
 };
 
 async function process(_nodes, provider, options, dataContext, userContext) {
+  if (this.error)
+    throw new Error(this.error);
+
   var nodes = _nodes;
   if (!(nodes instanceof Array))
     nodes = [ nodes ];

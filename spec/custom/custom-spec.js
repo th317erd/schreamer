@@ -9,7 +9,7 @@ const {
 } = require('../../src');
 
 describe("Custom Test 01", function() {
-  const { U32, U16, BIG_ENDIAN, LITTLE_ENDIAN, CUSTOM } = Definers;
+  const { U32, U16, BIG_ENDIAN, LITTLE_ENDIAN, CUSTOM, GROUP } = Definers;
 
   function customWriter(_value) {
     var value     = _value || 'Hello World!';
@@ -36,7 +36,7 @@ describe("Custom Test 01", function() {
     return result.toString('utf8');
   }
 
-  const FORMAT = [
+  const FORMAT = GROUP(
     // Header
     U32('magic',    0x4C4F434F),
     U16('version',  1),
@@ -50,7 +50,7 @@ describe("Custom Test 01", function() {
       customReader,
       'data2',
     )
-  ];
+  );
 
   const BE_FORMAT = BIG_ENDIAN(FORMAT);
   const LE_FORMAT = LITTLE_ENDIAN(FORMAT);

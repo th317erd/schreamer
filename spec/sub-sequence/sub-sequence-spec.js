@@ -9,9 +9,9 @@ const {
 } = require('../../src');
 
 describe("Sub-Sequence Test 01", function() {
-  const { U8, F32, U32, U16, BIG_ENDIAN, LITTLE_ENDIAN } = Definers;
+  const { U8, F32, U32, U16, BIG_ENDIAN, LITTLE_ENDIAN, GROUP } = Definers;
 
-  const FORMAT = [
+  const FORMAT = GROUP(
     // Header
     U32('magic',    0x4C4F434F),
     U16('version',  1),
@@ -32,7 +32,7 @@ describe("Sub-Sequence Test 01", function() {
       U8('value1'),
       U8('value2'),
     ]),
-  ];
+  );
 
   const BE_FORMAT = BIG_ENDIAN(FORMAT);
   const LE_FORMAT = LITTLE_ENDIAN(FORMAT);

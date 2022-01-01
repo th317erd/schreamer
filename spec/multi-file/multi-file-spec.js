@@ -9,9 +9,9 @@ const {
 } = require('../../src');
 
 describe("Multi-File Test01", function() {
-  const { U32, U16, BIG_ENDIAN, LITTLE_ENDIAN, LATIN1, FILE } = Definers;
+  const { U32, U16, BIG_ENDIAN, LITTLE_ENDIAN, LATIN1, FILE, GROUP } = Definers;
 
-  const FORMAT = [
+  const FORMAT = GROUP(
     FILE('multi-file01.bin',
       // Header
       U32('magic',    0x4C4F434F),
@@ -24,7 +24,7 @@ describe("Multi-File Test01", function() {
       U16('version',  2),
       U16('string',   LATIN1()),
     ),
-  ];
+  );
 
   const BE_FORMAT = BIG_ENDIAN(FORMAT);
   const LE_FORMAT = LITTLE_ENDIAN(FORMAT);
