@@ -1,6 +1,6 @@
 {
   "name": "schreamer",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "File schema defining and streaming with a composable interface",
   "main": "src/index.js",
   "scripts": {
