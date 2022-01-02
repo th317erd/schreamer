@@ -97,11 +97,25 @@ async function typeHandler(node, provider, options, userContext) {
   if (!this['endian'])
     throw new Error('Panic: Endianness not specified. Endianness can not be implicit, and must be defined.');
 
+  const debug = (message, ...args) => {
+    console.debug(`${message} @ ${this.writeBufferOffset}:`, ...args);
+  };
+
   var path = Path.join(this.path, (node.name) ? node.name : node.type);
   var value;
 
-  if (isValid(provider))
-    value = (node.name) ? provider[node.name] : provider;
+  if (isValid(provider)) {
+    if (provider instanceof Array) {
+      if (this.sequence)
+        value = provider[this.nodeIndex];
+      else
+        value = provider;
+    } else if (node.name) {
+      value = provider[node.name];
+    } else {
+      value = provider;
+    }
+  }
 
   if (value === undefined)
     value = node.value;
@@ -121,16 +135,23 @@ async function typeHandler(node, provider, options, userContext) {
 
   const writeArrayItems = async (items) => {
     var sequenceSize = items.length;
+
+    if (options.debug)
+      debug('Writing raw sequence length', path, sequenceSize);
+
     await writeToBuffer.call(this, node, sequenceSize, userContext);
 
     for (var i = 0, il = items.length; i < il; i++) {
-      var itemValue = items[i];
+      var item      = items[i];
       var itemPath  = Path.join(path, `[${i}]`);
 
-      if (!isValid(itemValue))
+      if (!isValid(item))
         throw new Error(`${itemPath}: Invalid value provided`);
 
-      await process.call(this.newContext(this, { path: itemPath }), node.value, itemValue, options, userContext);
+      if (options.debug)
+        debug('Writing raw sequence item', itemPath, item);
+
+      await process.call(this.newContext(this, { sequence: true, path: itemPath }), node.value, item, options, userContext);
     }
   };
 
@@ -153,13 +174,20 @@ async function typeHandler(node, provider, options, userContext) {
         // First is the length of items to follow
         if (index === 0) {
           var sequenceSize = item;
+
+          if (options.debug)
+            debug('Writing generated sequence length', path, sequenceSize);
+
           await writeToBuffer.call(this, node, sequenceSize, userContext);
         } else {
           var itemPath = Path.join(path, `[${index - 1}]`);
           if (!isValid(item))
             throw new Error(`${itemPath}: Invalid value provided`);
 
-          await process.call(this.newContext(this, { path: itemPath }), node.value, item, options, userContext);
+          if (options.debug)
+            debug('Writing generated sequence item', itemPath, item);
+
+          await process.call(this.newContext(this, { sequence: true, path: itemPath }), node.value, item, options, userContext);
         }
 
         index++;
@@ -185,13 +213,23 @@ async function typeHandler(node, provider, options, userContext) {
 
     // Write length of string in bytes
     var byteSize = stringNode.byteSize(stringNode, value, this);
+
+    if (options.debug)
+      debug('Writing string byteLength', path, byteSize);
+
     await writeToBuffer.call(this, node, byteSize, userContext);
 
     // Write string
+    if (options.debug)
+      debug('Writing string', path, value);
+
     await writeToBuffer.call(this, stringNode, value, userContext);
 
     return;
   }
+
+  if (options.debug)
+    debug('Writing value', path, value);
 
   await writeToBuffer.call(this, node, value, userContext);
 }
@@ -304,7 +342,7 @@ async function process(_nodes, provider, options, userContext) {
     if (!method)
       throw new Error(`Panic: Unknown type '${this['path']}/${type.toUpperCase()}'`);
 
-    results.push(await method.call(this, node, provider, options, userContext));
+    results.push(await method.call(this.newContext(this, { nodeIndex: i }), node, provider, options, userContext));
   }
 
   return results;

@@ -23,33 +23,67 @@ async function typeHandler(node, provider, options, dataContext, userContext) {
   if (!this['endian'])
     throw new Error('Panic: Endianness not specified. Endianness can not be implicit, and must be defined.');
 
+  const debug = (message, ...args) => {
+    console.log(`${message} @ ${this.readBufferOffset}:`, ...args);
+  };
+
   var path = Path.join(this.path, (node.name) ? node.name : node.type);
   var value;
 
+  var providerHelper = (provider && node.name) ? provider[node.name] : undefined;
+
   if (node.value && node.value.kind === 'string') {
     var stringNode  = node.value;
-    var byteLength  = await node.reader.call(this, node);
-    value = await stringNode.reader.call(this, byteLength, options.readBufferSize);
-  } else {
-    value = await node.reader.call(this, node);
 
+    if (options.debug)
+      debug(`Reading string byteLength as ${node.type.toUpperCase()}`, path);
+
+    var byteLength  = await node.reader.call(this, node);
+
+    if (options.debug)
+      debug(`Reading ${stringNode.type.toUpperCase()} string`, path, byteLength);
+
+    value = await stringNode.reader.call(this, byteLength, options.readBufferSize);
+
+    if (typeof providerHelper === 'function')
+      value = providerHelper.call(this, value, userContext, dataContext);
+  } else {
     if (node.value instanceof Array) {
-      var itemCount = value;
+      if (options.debug)
+        debug(`Reading sequence length as ${node.type.toUpperCase()}`, path);
+
+      var itemCount = await node.reader.call(this, node);
       var items     = new Array(itemCount);
 
       for (var i = 0; i < itemCount; i++) {
         var itemPath    = Path.join(path, `[${i}]`);
         var itemContext = {};
 
+        if (options.debug)
+          debug('Reading sequence item', itemPath);
+
         var result = await process.call(this.newContext(this, { path: itemPath }), node.value, (provider) ? provider[node.name] : undefined, options, itemContext, userContext);
 
         if (allNodesHaveNames(node.value))
-          items[i] = itemContext;
+          result = itemContext;
         else
-          items[i] = (node.value.length === 1) ? result[0] : result;
+          result = (node.value.length === 1) ? result[0] : result;
+
+        if (typeof providerHelper === 'function')
+          result = providerHelper.call(this, result, userContext, dataContext);
+
+        items[i] = result;
       }
 
       value = items;
+    } else {
+      if (options.debug)
+        debug(`Reading ${node.type.toUpperCase()} value`, path);
+
+      value = await node.reader.call(this, node);
+
+      if (typeof providerHelper === 'function')
+        value = providerHelper.call(this, value, userContext, dataContext);
     }
   }
 
