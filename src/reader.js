@@ -162,14 +162,14 @@ const methods = {
       });
     });
   },
-  group: async function(node, provider, options, userContext) {
-    return await process.call(this, node.children, provider, options, userContext);
+  group: async function(node, provider, options, dataContext, userContext) {
+    return await process.call(this, node.children, provider, options, dataContext, userContext);
   },
   select: async function(node, provider, options, userContext) {
-    var format = node.callback.call(this, { node, provider, options }, userContext);
-    format.parent = node.parent;
+    var newNode = node.callback.call(this, dataContext, userContext, { node, provider, options });
+    newNode.parent = node.parent;
 
-    return await process.call(this, format, provider, options, userContext);
+    return await process.call(this, newNode, provider, options, userContext);
   },
   i8: typeHandler,
   u8: typeHandler,
@@ -251,6 +251,7 @@ function createReader(_format, _provider) {
     var dataContext = {};
     var userContext = _userContext || {};
     var context = {
+      mode: 'read',
       path: Path.resolve(options.path),
       numberOfFileNodes,
       newContext: function(context, obj) {

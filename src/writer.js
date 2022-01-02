@@ -262,10 +262,10 @@ const methods = {
     return await process.call(this, node.children, provider, options, userContext);
   },
   select: async function(node, provider, options, userContext) {
-    var format = node.callback.call(this, { node, provider, options }, userContext);
-    format.parent = node.parent;
+    var newNode = node.callback.call(this, {}, userContext, { node, provider, options });
+    newNode.parent = node.parent;
 
-    return await process.call(this, format, provider, options, userContext);
+    return await process.call(this, newNode, provider, options, userContext);
   },
   i8: typeHandler,
   u8: typeHandler,
@@ -342,6 +342,7 @@ function createWriter(_format, _provider) {
 
     var userContext = _userContext || {};
     var context = {
+      mode: 'write',
       path: Path.resolve(options.path),
       newContext: function(context, obj) {
         var c = Object.create(context);
