@@ -199,11 +199,11 @@ const methods = {
   group: async function(node, provider, options, dataContext, userContext) {
     return await process.call(this, node.children, provider, options, dataContext, userContext);
   },
-  select: async function(node, provider, options, userContext) {
+  select: async function(node, provider, options, dataContext, userContext) {
     var newNode = node.callback.call(this, dataContext, userContext, { node, provider, options });
     newNode.parent = node.parent;
 
-    return await process.call(this, newNode, provider, options, userContext);
+    return await process.call(this, newNode, provider, options, dataContext, userContext);
   },
   i8: typeHandler,
   u8: typeHandler,
