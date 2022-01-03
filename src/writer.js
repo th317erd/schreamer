@@ -192,7 +192,9 @@ async function typeHandler(node, provider, options, userContext) {
 
       return;
     }
-  } else if (value instanceof Array) {
+  }
+
+  if (value instanceof Array) {
     // Handle array of items
     return await writeArrayItems(value);
   } else if (node.value && node.value.kind === 'string') {
