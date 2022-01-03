@@ -6,7 +6,7 @@ const {
 }                 = require('./utils');
 const Definers    = require('./definers');
 
-const DEFAULT_WRITE_BUFFER_SIZE = 1024 * 2;
+const DEFAULT_WRITE_BUFFER_SIZE = 1024 * 16;
 
 async function writeToStream() {
   const doWrite = (chunk) => {
@@ -14,10 +14,10 @@ async function writeToStream() {
       return new Promise((resolve, reject) => {
         const errorHandler = (error) => reject(error);
 
-        stream.on('error', errorHandler);
+        writeStream.on('error', errorHandler);
 
-        stream.once('drain', async () => {
-          stream.off('error', errorHandler);
+        writeStream.once('drain', async () => {
+          writeStream.off('error', errorHandler);
 
           await doWrite(chunk);
 
