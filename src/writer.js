@@ -10,21 +10,18 @@ const DEFAULT_WRITE_BUFFER_SIZE = 1024 * 16;
 
 async function writeToStream() {
   const doWrite = (chunk) => {
-    if (!writeStream.write(chunk)) {
-      return new Promise((resolve, reject) => {
-        const errorHandler = (error) => reject(error);
+    // On successful write, return
+    if (writeStream.write(chunk))
+      return;
 
-        writeStream.on('error', errorHandler);
+    return new Promise((resolve, reject) => {
+      writeStream.on('error', reject);
 
-        writeStream.once('drain', async () => {
-          writeStream.off('error', errorHandler);
-
-          await doWrite(chunk);
-
-          resolve();
-        });
+      writeStream.once('drain', () => {
+        writeStream.off('error', reject);
+        resolve();
       });
-    }
+    });
   };
 
   var {
