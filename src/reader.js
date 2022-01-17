@@ -53,7 +53,9 @@ async function typeHandler(node, provider, options, dataContext, userContext) {
         debug(`Reading sequence length as ${node.type.toUpperCase()}`, path);
 
       var itemCount = await node.reader.call(this, node);
-      var items     = new Array(itemCount);
+      var allNamed  = allNodesHaveNames(node.value);
+      var isSingle  = (node.value.length === 1);
+      var items;
 
       for (var i = 0; i < itemCount; i++) {
         var itemPath    = Path.join(path, `[${i}]`);
@@ -64,15 +66,20 @@ async function typeHandler(node, provider, options, dataContext, userContext) {
 
         var result = await process.call(this.newContext(this, { path: itemPath }), node.value, (provider) ? provider[node.name] : undefined, options, itemContext, userContext);
 
-        if (allNodesHaveNames(node.value))
+        if (allNamed)
           result = itemContext;
         else
-          result = (node.value.length === 1) ? result[0] : result;
+          result = (isSingle) ? result[0] : result;
 
         if (typeof providerHelper === 'function')
           result = providerHelper.call(this, result, userContext, dataContext);
 
-        items[i] = result;
+        if (result !== undefined) {
+          if (!items)
+            items = [];
+
+          items.push(result);
+        }
       }
 
       value = items;
@@ -87,7 +94,7 @@ async function typeHandler(node, provider, options, dataContext, userContext) {
     }
   }
 
-  if (node.name)
+  if (node.name && value !== undefined)
     dataContext[node.name] = value;
 
   return value;
